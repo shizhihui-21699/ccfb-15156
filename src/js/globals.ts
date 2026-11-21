@@ -169,6 +169,13 @@ function resolveChain(node: estree.MemberExpression): Chain {
   const properties: string[] = [];
   let current: estree.Expression = node;
   for (;;) {
+    // Optional chaining wraps each link in a ChainExpression
+    // (`a?.b?.c` → Chain(Member(Chain(Member(a,b)),c))); unwrap so the chain
+    // walk sees the underlying member expressions.
+    if ((current as estree.Node).type === 'ChainExpression') {
+      current = (current as unknown as { expression: estree.Expression }).expression;
+      continue;
+    }
     if (current.type !== 'MemberExpression') break;
     if (!current.computed && current.property.type === 'Identifier') {
       properties.unshift(current.property.name);
@@ -179,8 +186,7 @@ function resolveChain(node: estree.MemberExpression): Chain {
     }
     current = current.object as estree.Expression;
   }
-  const outermost = properties.length ? node : node;
-  return { root: current, properties, outermost };
+  return { root: current, properties, outermost: node };
 }
 
 interface UseContext {

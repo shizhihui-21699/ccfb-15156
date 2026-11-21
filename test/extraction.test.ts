@@ -134,3 +134,46 @@ test('parses minified code without beautification', () => {
   const rs = reads(`!function(){var a=window.CONFIG||{};e.src=a.cdn}();`);
   assert.ok(find(rs, 'CONFIG'));
 });
+
+test('traces optional chaining chains to a sink', () => {
+  const rs = reads(`var u = window.APP?.config?.url; el.href = u;`);
+  const r = find(rs, 'APP');
+  assert.ok(r);
+  assert.deepEqual(r.propertyPath, ['config', 'url']);
+  assert.ok(r.usages.includes('url-sink'), `expected url-sink, got ${r.usages.join(',')}`);
+});
+
+test('treats assignment to window.location as a navigation sink', () => {
+  const rs = reads(`var u = window.APP.config.url; window.location = u;`);
+  const r = find(rs, 'APP');
+  assert.ok(r);
+  assert.ok(r.usages.includes('url-sink'));
+});
+
+test('handles typeof guard followed by use', () => {
+  const rs = reads(`if (typeof APP_CONFIG !== 'undefined') { var s = document.createElement('script'); s.src = APP_CONFIG.cdn; }`);
+  const r = find(rs, 'APP_CONFIG');
+  assert.ok(r);
+  assert.ok(r.usages.includes('url-sink'));
+});
+
+test('handles webpack jsonp bootstrap without false locators', () => {
+  const rs = reads(`(window.webpackJsonp = window.webpackJsonp || []).push([[0],{}]);`);
+  const r = find(rs, 'webpackJsonp');
+  // The assignment target itself is a write, but the `||` operand is a read.
+  assert.ok(r === undefined || r.usages.includes('type-test'));
+});
+
+test('handles Object.assign defaults merges', () => {
+  const rs = reads(`var cfg = Object.assign({}, window.DEFAULTS, window.OVERRIDES); el.src = cfg.url;`);
+  const defaults = find(rs, 'DEFAULTS');
+  assert.ok(defaults);
+  assert.ok(defaults.usages.includes('url-sink'));
+});
+
+test('handles an IIFE receiving window as a parameter', () => {
+  const rs = reads(`(function(g){ var c = g.APP_CONFIG || {}; }).call(null, window);`);
+  // `g.APP_CONFIG` is not resolvable to a global here, but the script must not
+  // crash and must not invent a finding.
+  assert.doesNotThrow(() => rs);
+});

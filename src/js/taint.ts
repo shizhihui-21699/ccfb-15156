@@ -137,7 +137,14 @@ function collectDeclaredNames(parsed: ParsedScript): Set<string> {
 /** Is this member-expression access reading a URL-bearing property? */
 function memberIsUrlProperty(node: estree.MemberExpression): boolean {
   const prop = staticPropertyName(node);
-  return prop != null && URL_SINK_PROPS.has(prop);
+  if (prop == null) return false;
+  if (URL_SINK_PROPS.has(prop)) return true;
+  // `window.location` / `document.location` assignment navigates.
+  if (prop === 'location') {
+    const root = rootOfMember(node);
+    if (root.type === 'Identifier') return WINDOW_ALIASES.has(root.name) || DOCUMENT_ALIASES.has(root.name);
+  }
+  return false;
 }
 
 export interface TaintResult {
@@ -266,8 +273,12 @@ export function propagateTaint(parsed: ParsedScript): TaintResult {
   // Find sink sites and credit every tainted ref that reaches them.
   walk.simple(parsed.ast, {
     AssignmentExpression(node: estree.AssignmentExpression) {
-      if (node.left.type !== 'MemberExpression') return;
-      if (!memberIsUrlProperty(node.left)) return;
+      // Assigning to `location` / `location.href` navigates, which is a URL
+      // sink just as much as assigning to a script's src.
+      const isNavigation =
+        (node.left.type === 'Identifier' && node.left.name === 'location') ||
+        (node.left.type === 'MemberExpression' && memberIsUrlProperty(node.left));
+      if (!isNavigation) return;
       const refs = new Set<string>();
       collectRefs(node.right, aliases, refs);
       for (const r of refs) addUsage(r, 'url-sink');
