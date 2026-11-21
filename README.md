@@ -192,7 +192,7 @@ Options: `--json`, `--out <file>`, `--fail-on <severity>` (CI gate),
 
 The tool is validated two ways.
 
-**Unit tests** (87 total) cover the engine model, extraction shapes (minified,
+**Unit tests** (69 total) cover the engine model, extraction shapes (minified,
 module, CommonJS, optional chaining, `this`, destructuring), taint, injection
 planning, scoring, and precision on real library code.
 
@@ -205,7 +205,7 @@ the model cannot drift away from reality without a test failing.
 ```bash
 npm test              # unit tests
 bash scripts/setup-browsers.sh   # one-time: download Firefox + WebKit
-npm run test:e2e      # 11 pages × 3 engines
+npm run test:e2e      # 12 pages × 3 engines
 npm run test:all
 ```
 
