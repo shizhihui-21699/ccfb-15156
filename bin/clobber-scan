@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+// Executable entry point. Node 22.6+ runs the TypeScript source directly with
+// type stripping, so no build step is needed.
+import('../src/cli.ts').then(({ runCli }) => {
+  const { exitCode, output } = runCli(process.argv.slice(2));
+  process.stdout.write(output);
+  process.exit(exitCode);
+});

@@ -20,3 +20,5 @@ venv/
 # local probe scratch and downloaded browser engines
 .scratch/
 .browsers/
+
+# generated probe file is source-of-truth; keep it, but ignore scratch
