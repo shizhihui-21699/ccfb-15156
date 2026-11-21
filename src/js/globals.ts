@@ -23,6 +23,7 @@
 import * as walk from 'acorn-walk';
 import type * as estree from 'estree';
 import type { ParsedScript, SourcePosition } from './parse.ts';
+import { isEnvironmentGlobal } from './environment.ts';
 
 export type ReadKind =
   | 'bare-identifier' // `CONFIG`
@@ -336,6 +337,10 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
   ) => {
     if (!name) return;
     if (imported.has(name)) return;
+    // Environment globals (`require`, `process`, `Buffer`, `setTimeout`, ...)
+    // cannot be supplied by an element id/name in a meaningful way; they are
+    // not application-controlled config.
+    if (isEnvironmentGlobal(name)) return;
     const loc = node.loc?.start;
     const position = { line: loc?.line ?? 0, column: loc?.column ?? 0 };
     // Classify the *outermost* expression of the chain, so `CONFIG.cdn` in
@@ -374,6 +379,14 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
       const root = chain.root;
       const props = chain.properties;
       if (props.length === 0) return;
+
+      // A root identifier that resolves to a local binding is not the global
+      // object, however it is named. This matters for CommonJS/Node code where
+      // `self`, `window`, `globalThis` or `document` are frequently locals
+      // (`var self = this;`), and treating them as globals would invent reads.
+      if (root.type === 'Identifier' && local.get(root as unknown as estree.Node) === true) {
+        return;
+      }
 
       // For window/document/this roots the *first* property is the clobbered
       // name and the rest is the nested path (`window.CONFIG.cdn` → name
@@ -529,6 +542,10 @@ function isNonReferenceIdentifier(node: estree.Identifier, parent: estree.Node):
     case 'ImportNamespaceSpecifier':
     case 'ExportSpecifier':
       return true;
+    case 'ExportAllDeclaration':
+      return parent.exported === node;
+    case 'ExportNamedDeclaration':
+      return parent.source != null; // re-export names are not local reads
     case 'VariableDeclarator':
       return parent.id === node;
     case 'FunctionDeclaration':
