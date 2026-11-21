@@ -1,0 +1,4 @@
+{
+  "page": { "htmlFile": "page.html", "regions": [{ "name": "reviews", "selector": "#reviews", "profile": "strictNoIdName" }] },
+  "scripts": [{ "id": "app.js", "path": "app.js" }]
+}

@@ -375,6 +375,8 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
       // the name and every property is the path (`CONFIG.cdn.x` → name CONFIG,
       // path [cdn, x]).
       if (root.type === 'Identifier' && isWindowRoot(root.name)) {
+        // Writing `window.X = ...` is not a read of a clobberable value.
+        if (parent && parent.type === 'AssignmentExpression' && parent.left === node) return;
         const head = props[0]!;
         if (head === '*') return;
         const kind: ReadKind = root.name === 'self' ? 'self-property'
@@ -400,6 +402,8 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
       // A root that resolves to a local binding is not a global read.
       if (root.type === 'Identifier') {
         if (local.get(root as unknown as estree.Node) === true) return;
+        // `window.X = val` is a write; not a clobberable read.
+        if (parent && parent.type === 'AssignmentExpression' && parent.left === node) return;
         push(root.name, 'bare-identifier', root, parent, props, node);
       }
     },
@@ -417,6 +421,9 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
       if (imported.has(node.name)) return;
       // Skip references that resolve to a local (function/block) binding.
       if (local.get(node as unknown as estree.Node) === true) return;
+      // A write (`window.X = ...`, `X = ...`, `X++`) is not a read of a
+      // clobberable value: the attacker's element would be overwritten.
+      if (isWriteOnlyReference(node, parent)) return;
       push(node.name, 'bare-identifier', node, parent, []);
     },
 
@@ -459,6 +466,13 @@ function declarationFor(
   // for bare reads, and also means "no window property" for window reads.
   void kind;
   return declarationProvenance(parsed, name);
+}
+
+/** True when this identifier is only written (assignment target or update). */
+function isWriteOnlyReference(node: estree.Identifier, parent: estree.Node): boolean {
+  if (parent.type === 'AssignmentExpression' && parent.left === node) return true;
+  if (parent.type === 'UpdateExpression') return true;
+  return false;
 }
 
 function isNonReferenceIdentifier(node: estree.Identifier, parent: estree.Node): boolean {

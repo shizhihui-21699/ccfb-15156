@@ -125,6 +125,15 @@ function staticPropertyName(node: estree.MemberExpression): string | null {
   return null;
 }
 
+/** All names declared anywhere in the script (any scope). */
+function collectDeclaredNames(parsed: ParsedScript): Set<string> {
+  const names = new Set<string>();
+  for (const scope of parsed.scopeManager.scopes) {
+    for (const v of scope.variables) names.add(v.name);
+  }
+  return names;
+}
+
 /** Is this member-expression access reading a URL-bearing property? */
 function memberIsUrlProperty(node: estree.MemberExpression): boolean {
   const prop = staticPropertyName(node);
@@ -147,6 +156,12 @@ export function propagateTaint(parsed: ParsedScript): TaintResult {
 
   // Seed aliases from declarations/assignments, iterating to a fixpoint so
   // alias chains resolve (b === a; c === b).
+  // Free identifiers that are not declared anywhere in this script behave as
+  // globals. Seed them as their own taint source so a chain like
+  // `(jQuery && jQuery.cdn) + '.js'` credits window.jQuery.
+  const declared = collectDeclaredNames(parsed);
+  const freeGlobals = new Set<string>();
+
   const seeders: Array<{ local: string; node: estree.Node | null }> = [];
   walk.simple(parsed.ast, {
     VariableDeclarator(node: estree.VariableDeclarator) {
@@ -207,6 +222,21 @@ export function propagateTaint(parsed: ParsedScript): TaintResult {
       }
     },
   } as never);
+
+  // Seed free globals: every identifier reference not declared locally and not
+  // a known builtin alias is a window property an element could supply.
+  walk.simple(parsed.ast, {
+    Identifier(node: estree.Identifier) {
+      if (declared.has(node.name)) return;
+      if (WINDOW_ALIASES.has(node.name) || DOCUMENT_ALIASES.has(node.name)) return;
+      freeGlobals.add(node.name);
+    },
+  } as never);
+  for (const g of freeGlobals) {
+    const set = aliases.get(g) ?? new Set<string>();
+    set.add(refKey({ name: g, scope: 'window' }));
+    aliases.set(g, set);
+  }
 
   let iterations = 0;
   for (let changed = true; changed && iterations < 12; ) {
