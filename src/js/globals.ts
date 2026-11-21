@@ -123,6 +123,28 @@ function looksLikeConfigName(name: string): boolean {
   return CONFIG_NAME.test(name) || /(?:Config|Settings|Options|Env)$/.test(name);
 }
 
+/**
+ * Top-level `var` and `function` declaration names. In a shared global scope
+ * these install own window properties, so a read of the same name in another
+ * classic script is protected.
+ */
+export function topLevelVarNames(parsed: ParsedScript): Set<string> {
+  const out = new Set<string>();
+  const globalScope = parsed.scopeManager.globalScope;
+  if (!globalScope) return out;
+  for (const v of globalScope.variables) {
+    const isVar = v.defs.some((d) => {
+      if (d.type === 'FunctionName' || d.type === 'ClassName') return true;
+      if (d.type !== 'Variable') return false;
+      return (d.parent as { kind?: string } | null | undefined)?.kind === 'var';
+    });
+    // Class declarations are lexical, not var; exclude them for this purpose.
+    const isClass = v.defs.some((d) => d.type === 'ClassName');
+    if (isVar && !isClass) out.add(v.name);
+  }
+  return out;
+}
+
 /** Collect names imported by a module (these are never globals). */
 function importedNames(parsed: ParsedScript): Set<string> {
   const names = new Set<string>();
@@ -318,14 +340,29 @@ function localBindingMap(parsed: ParsedScript): Map<estree.Node, boolean> {
   return map;
 }
 
+export interface ExtractOptions {
+  /**
+   * Names declared with `var`/`function` in *any* script analysed together.
+   *
+   * In a page without modules, every classic script shares one global lexical
+   * environment, so a `var RUNTIME_CONFIG` in config.js is an own window
+   * property that a later bundle's `window.RUNTIME_CONFIG` read hits. Without
+   * this, each script is analysed in isolation and cross-script declarations
+   * are invisible — a false positive. Modules are excluded by the caller
+   * because module bindings are not globals.
+   */
+  varDeclaredElsewhere?: ReadonlySet<string>;
+}
+
 /**
  * Extract every global read from one parsed script.
  */
-export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
+export function extractGlobalReads(parsed: ParsedScript, options: ExtractOptions = {}): GlobalRead[] {
   const imported = importedNames(parsed);
   const reads: GlobalRead[] = [];
   const isModule = parsed.source.kind === 'module';
   const local = localBindingMap(parsed);
+  const varElsewhere = options.varDeclaredElsewhere ?? new Set<string>();
 
   const push = (
     name: string,
@@ -351,7 +388,8 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
     if (parent && parent.type === 'CallExpression' && calleeIsUrlSink(parent.callee)) {
       usages.add('url-sink');
     }
-    const declaration = declarationFor(kind, name, parsed, imported);
+    let declaration = declarationFor(kind, name, parsed, imported);
+    if (declaration === 'none' && varElsewhere.has(name)) declaration = 'var';
     // A path whose final segment is a URL-bearing attribute (`CONFIG.cdn.src`,
     // `CONFIG.scriptURL`) is a URL sink regardless of the surrounding parent.
     if (pathIsUrlSink(propertyPath)) usages.add('url-sink');

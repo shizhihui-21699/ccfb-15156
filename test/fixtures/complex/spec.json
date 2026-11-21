@@ -1,0 +1,13 @@
+{
+  "page": {
+    "htmlFile": "page.html",
+    "regions": [
+      { "name": "cms-widget", "selector": "#cms-widget", "profile": "richText" },
+      { "name": "article-body", "selector": "#article-body", "profile": "unsafeInnerHtml" }
+    ]
+  },
+  "scripts": [
+    { "id": "config.js", "path": "config.js" },
+    { "id": "bundle.min.js", "path": "bundle.min.js" }
+  ]
+}

@@ -12,7 +12,7 @@ import { loadEngineBuiltins } from './model/builtins.ts';
 import type { EngineBuiltins } from './model/engine-semantics.ts';
 import type { ScriptSource } from './js/parse.ts';
 import { parseScripts, ScriptParseError } from './js/parse.ts';
-import { extractGlobalReads } from './js/globals.ts';
+import { extractGlobalReads, topLevelVarNames } from './js/globals.ts';
 import { propagateTaint, applyTaint } from './js/taint.ts';
 import type { PageSpec } from './html/page.ts';
 import { analyzePage } from './html/page.ts';
@@ -48,7 +48,18 @@ export function scan(input: ScanInput, builtins: Record<Engine, EngineBuiltins> 
   const engines = input.engines ?? ENGINES;
   const { parsed, failures } = parseScripts(input.scripts);
 
-  const rawReads = parsed.flatMap((p) => extractGlobalReads(p));
+  // Classic scripts share one global scope: a top-level `var`/`function` in any
+  // of them installs an own window property that beats named access for the same
+  // name read anywhere else. Collect those before extraction.
+  const varDeclaredElsewhere = new Set<string>();
+  for (const p of parsed) {
+    if (p.source.kind === 'module') continue;
+    for (const name of topLevelVarNames(p)) varDeclaredElsewhere.add(name);
+  }
+  // A script's own var declarations already protect via declarationProvenance;
+  // the shared set matters for reads in *other* scripts. Passing it uniformly is
+  // harmless because declarationFor already prefers the script's own answer.
+  const rawReads = parsed.flatMap((p) => extractGlobalReads(p, { varDeclaredElsewhere }));
 
   let taintIterations = 0;
   const taintByScript = new Map<string, ReturnType<typeof propagateTaint>>();

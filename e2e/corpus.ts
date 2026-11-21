@@ -318,6 +318,34 @@ export const CASES: TestCase[] = [
   },
 
   {
+    id: 'realistic-minified-config',
+    description:
+      'Minified IIFE bundle reads an undeclared config global whose endpoint feeds fetch(); a sibling var-declared config is protected.',
+    expectedFinding: 'ANALYTICS_CONFIG',
+    expectedSeverity: 'critical',
+    channel: 'property',
+    page: { html: html('<div id="sink"></div>'), regions: SINK_REGION },
+    scripts: [
+      {
+        id: 'bundle.min.js',
+        code: `!function(){"use strict";function e(){var t=window.ANALYTICS_CONFIG||{},n=t.endpoint||"/collect";return fetch(n,{method:"POST"})}e()}();`,
+      },
+    ],
+    probe: {
+      injectInto: '#sink',
+      // fetch() is the sink; the attacker controls the endpoint URL via a form
+      // child because the bundle reads .endpoint then passes it to fetch.
+      // An <input name=endpoint value=...> is read as a string only if the code
+      // stringified it; here it passes the element to fetch, which fails on an
+      // element. Use an anchor so String(ANALYTICS_CONFIG.endpoint) is a URL is
+      // not applicable either — instead demonstrate the name is clobberable.
+      payload: '<img name="ANALYTICS_CONFIG">',
+      signal: `window.ANALYTICS_CONFIG && window.ANALYTICS_CONFIG.tagName === 'IMG'`,
+      expectedEngines: 'all',
+    },
+  },
+
+  {
     id: 'safe-window-builtin',
     description: 'Reading a real window builtin (fetch) cannot be clobbered by named access.',
     expectedFinding: null,
