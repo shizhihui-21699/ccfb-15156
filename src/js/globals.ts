@@ -377,6 +377,7 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
       if (root.type === 'Identifier' && isWindowRoot(root.name)) {
         // Writing `window.X = ...` is not a read of a clobberable value.
         if (parent && parent.type === 'AssignmentExpression' && parent.left === node) return;
+        if (parent && parent.type === 'UpdateExpression') return;
         const head = props[0]!;
         if (head === '*') return;
         const kind: ReadKind = root.name === 'self' ? 'self-property'
@@ -386,12 +387,18 @@ export function extractGlobalReads(parsed: ParsedScript): GlobalRead[] {
         return;
       }
       if (root.type === 'Identifier' && isDocumentRoot(root.name)) {
+        if (parent && parent.type === 'AssignmentExpression' && parent.left === node) return;
+        if (parent && parent.type === 'UpdateExpression') return;
         const head = props[0]!;
         if (head === '*') return;
         push(head, node.computed ? 'document-computed' : 'document-property', node, parent, props.slice(1), node);
         return;
       }
       if (root.type === 'ThisExpression' && !isModule) {
+        // `this` is the global object only at the top level of a classic
+        // script. Inside any function `this` is call-site dependent, so a
+        // `this.X` read there says nothing about globals.
+        if (!isTopLevelThis(ancestors)) return;
         const head = props[0]!;
         if (head === '*') return;
         push(head, 'this-property', node, parent, props.slice(1), node);
@@ -466,6 +473,28 @@ function declarationFor(
   // for bare reads, and also means "no window property" for window reads.
   void kind;
   return declarationProvenance(parsed, name);
+}
+
+/**
+ * True when a node sits at the top level of the program (no enclosing function,
+ * method, or class field initialiser). `this` only refers to the global object
+ * there.
+ */
+function isTopLevelThis(ancestors: estree.Node[]): boolean {
+  for (const n of ancestors) {
+    switch (n.type) {
+      case 'FunctionDeclaration':
+      case 'FunctionExpression':
+      case 'ArrowFunctionExpression':
+      case 'PropertyDefinition':
+      case 'MethodDefinition':
+      case 'StaticBlock':
+        return false;
+      default:
+        break;
+    }
+  }
+  return true;
 }
 
 /** True when this identifier is only written (assignment target or update). */

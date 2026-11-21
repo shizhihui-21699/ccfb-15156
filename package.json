@@ -10,9 +10,17 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --test test/*.test.ts",
     "test:e2e": "node --test e2e/*.test.ts",
-    "probe": "node scripts/probe-engines.ts"
+    "probe": "node scripts/probe-engines.ts",
+    "setup:browsers": "bash scripts/setup-browsers.sh",
+    "test:all": "node --test test/*.test.ts e2e/*.test.ts",
+    "scan": "node src/cli.ts"
   },
-  "keywords": ["security", "dom-clobbering", "static-analysis", "typescript"],
+  "keywords": [
+    "security",
+    "dom-clobbering",
+    "static-analysis",
+    "typescript"
+  ],
   "license": "MIT",
   "dependencies": {
     "acorn": "^8.19.0",
