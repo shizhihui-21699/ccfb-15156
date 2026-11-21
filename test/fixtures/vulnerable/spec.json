@@ -1,0 +1,12 @@
+{
+  "page": {
+    "htmlFile": "page.html",
+    "regions": [
+      { "name": "description", "selector": "#description", "profile": "richText" },
+      { "name": "reviews", "selector": "#reviews", "profile": "richText" }
+    ]
+  },
+  "scripts": [
+    { "id": "bundle.js", "path": "bundle.js" }
+  ]
+}

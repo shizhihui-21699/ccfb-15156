@@ -16,3 +16,7 @@ node_modules/
 __pycache__/
 .venv/
 venv/
+
+# local probe scratch and downloaded browser engines
+.scratch/
+.browsers/

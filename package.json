@@ -1,0 +1,29 @@
+{
+  "name": "clobber-scan",
+  "version": "0.1.0",
+  "description": "Static detector for DOM clobbering of globals and document properties by user-controlled HTML",
+  "type": "module",
+  "bin": {
+    "clobber-scan": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "test:e2e": "node --test e2e/*.test.ts",
+    "probe": "node scripts/probe-engines.ts"
+  },
+  "keywords": ["security", "dom-clobbering", "static-analysis", "typescript"],
+  "license": "MIT",
+  "dependencies": {
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5",
+    "eslint-scope": "^9.1.2",
+    "parse5": "^8.1.1",
+    "source-map-js": "^1.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "playwright-core": "1.56",
+    "typescript": "^7.0.2"
+  }
+}
